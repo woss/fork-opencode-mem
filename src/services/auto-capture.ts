@@ -37,6 +37,7 @@ export async function performAutoCapture(
       return;
     }
     claimedPromptId = prompt.id;
+    attempt = prompt.capture_attempts || 0;
 
     while (attempt < maxRetries) {
       attempt++;

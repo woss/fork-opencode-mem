@@ -18,6 +18,7 @@ export interface UserPrompt {
   captured: boolean;
   userLearningCaptured: boolean;
   linkedMemoryId: string | null;
+  capture_attempts: number;
 }
 
 export class UserPromptManager {
@@ -89,7 +90,7 @@ export class UserPromptManager {
     const maxRetries = CONFIG.autoCaptureMaxRetries ?? 3;
     const stmt = this.db.prepare(`
       SELECT * FROM user_prompts 
-      WHERE session_id = ? AND captured = 0 AND capture_attempts <= ?
+      WHERE session_id = ? AND captured = 0 AND capture_attempts < ?
       ORDER BY created_at DESC 
       LIMIT 1
     `);
@@ -145,7 +146,7 @@ export class UserPromptManager {
   countUncapturedPrompts(): number {
     const maxRetries = CONFIG.autoCaptureMaxRetries ?? 3;
     const stmt = this.db.prepare(
-      `SELECT COUNT(*) as count FROM user_prompts WHERE captured = 0 AND capture_attempts <= ?`
+      `SELECT COUNT(*) as count FROM user_prompts WHERE captured = 0 AND capture_attempts < ?`
     );
     const row = stmt.get(maxRetries) as any;
     return row?.count || 0;
@@ -155,7 +156,7 @@ export class UserPromptManager {
     const maxRetries = CONFIG.autoCaptureMaxRetries ?? 3;
     const stmt = this.db.prepare(`
       SELECT * FROM user_prompts 
-      WHERE captured = 0 AND capture_attempts <= ?
+      WHERE captured = 0 AND capture_attempts < ?
       ORDER BY capture_attempts ASC, created_at ASC 
       LIMIT ?
     `);
@@ -290,6 +291,7 @@ export class UserPromptManager {
       captured: row.captured === 1,
       userLearningCaptured: row.user_learning_captured === 1,
       linkedMemoryId: row.linked_memory_id,
+      capture_attempts: row.capture_attempts || 0,
     };
   }
 }
