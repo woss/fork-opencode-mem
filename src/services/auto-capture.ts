@@ -126,6 +126,7 @@ export async function performAutoCapture(
           .catch(() => {});
       }
     } else {
+      log("Auto-capture failed to save memory to database", { error: result.error });
       if (CONFIG.showErrorToasts) {
         await ctx.client?.tui
           .showToast({
@@ -140,8 +141,9 @@ export async function performAutoCapture(
       }
     }
   } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    log("Auto-capture execution error", { error: errMsg });
     if (CONFIG.showErrorToasts) {
-      const errMsg = error instanceof Error ? error.message : String(error);
       const shortReason = errMsg.length > 100 ? errMsg.substring(0, 100) + "..." : errMsg;
       await ctx.client?.tui
         .showToast({
