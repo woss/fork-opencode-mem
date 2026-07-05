@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { stripJsoncComments } from "./services/jsonc.js";
 import { resolveSecretValue } from "./services/secret-resolver.js";
-import { allowsMissingApiKey, isPlaceholderApiKey } from "./services/ai/api-key-placeholder.js";
+import { isPlaceholderApiKey } from "./services/ai/api-key-placeholder.js";
 
 const CONFIG_DIR = join(homedir(), ".config", "opencode");
 const DATA_DIR = join(homedir(), ".opencode-mem");
@@ -606,7 +606,7 @@ function hasValue(value: string | undefined): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-export { allowsMissingApiKey, isPlaceholderApiKey };
+export { isPlaceholderApiKey };
 
 export function getAutoCaptureProviderStatus(
   config: AutoCaptureProviderRuntimeConfig
@@ -625,21 +625,13 @@ export function getAutoCaptureProviderStatus(
   const hasMemoryApiUrl = hasValue(config.memoryApiUrl);
   const hasMemoryApiKey = hasValue(config.memoryApiKey);
   const hasPlaceholderMemoryApiKey = isPlaceholderApiKey(config.memoryApiKey);
-  const missingMemoryApiKeyAllowed = allowsMissingApiKey(config.memoryApiUrl);
 
   if (!hasMemoryModel) issues.push("memoryModel is not configured");
   if (!hasMemoryApiUrl) issues.push("memoryApiUrl is not configured");
-  if (hasMemoryApiUrl && !hasMemoryApiKey && !missingMemoryApiKeyAllowed) {
-    issues.push("memoryApiKey is not configured");
-  }
+  if (!hasMemoryApiKey) issues.push("memoryApiKey is not configured");
   if (hasPlaceholderMemoryApiKey) issues.push("memoryApiKey contains a placeholder value");
 
-  if (
-    hasMemoryModel &&
-    hasMemoryApiUrl &&
-    (hasMemoryApiKey || missingMemoryApiKeyAllowed) &&
-    !hasPlaceholderMemoryApiKey
-  ) {
+  if (hasMemoryModel && hasMemoryApiUrl && hasMemoryApiKey && !hasPlaceholderMemoryApiKey) {
     return { ready: true, mode: "manual", issues: [] };
   }
 

@@ -14,16 +14,3 @@ export function isPlaceholderApiKey(value: string | undefined): boolean {
 
   return PLACEHOLDER_API_KEYS.has(value.trim().toLowerCase());
 }
-
-export function allowsMissingApiKey(apiUrl: string | undefined): boolean {
-  if (!apiUrl) {
-    return false;
-  }
-
-  try {
-    const url = new URL(apiUrl);
-    return ["localhost", "127.0.0.1", "::1", "0.0.0.0"].includes(url.hostname);
-  } catch {
-    return false;
-  }
-}

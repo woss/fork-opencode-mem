@@ -1,5 +1,5 @@
 import type { ProviderConfig } from "./providers/base-provider.js";
-import { allowsMissingApiKey, isPlaceholderApiKey } from "./api-key-placeholder.js";
+import { isPlaceholderApiKey } from "./api-key-placeholder.js";
 
 interface MemoryProviderRuntimeConfig {
   memoryModel?: string;
@@ -39,7 +39,7 @@ export function buildMemoryProviderConfig(
     );
   }
 
-  if (!config.memoryApiKey && !allowsMissingApiKey(memoryApiUrl)) {
+  if (!config.memoryApiKey) {
     throw new Error("External API not configured for memory provider: missing memoryApiKey");
   }
 

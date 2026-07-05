@@ -129,7 +129,7 @@ describe("config", () => {
       ).toBe(true);
     });
 
-    it("should report manual provider mode when model and API URL are configured", () => {
+    it("should report manual provider mode when model, API URL, and API key are configured", () => {
       expect(
         getAutoCaptureProviderStatus({
           ...CONFIG,
@@ -137,12 +137,12 @@ describe("config", () => {
           opencodeModel: undefined,
           memoryModel: "local-model",
           memoryApiUrl: "http://127.0.0.1:11434/v1",
-          memoryApiKey: undefined,
+          memoryApiKey: "local-api-key",
         })
       ).toEqual({ ready: true, mode: "manual", issues: [] });
     });
 
-    it("should report missing memoryApiKey for hosted manual provider URLs", () => {
+    it("should report missing memoryApiKey when model and API URL are configured without a key", () => {
       expect(
         getAutoCaptureProviderStatus({
           ...CONFIG,
