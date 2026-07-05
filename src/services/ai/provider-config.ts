@@ -16,6 +16,14 @@ interface ProviderConfigOverrides {
   iterationTimeout?: number;
 }
 
+function requireConfiguredField(value: string | undefined, fieldName: string): string {
+  if (!value) {
+    throw new Error(`Memory provider config invariant failed: ${fieldName} is not configured`);
+  }
+
+  return value;
+}
+
 export function buildMemoryProviderConfig(
   config: MemoryProviderRuntimeConfig,
   overrides: ProviderConfigOverrides = {}
@@ -30,14 +38,18 @@ export function buildMemoryProviderConfig(
   if (!memoryApiKey) issues.push("missing memoryApiKey");
   if (isPlaceholderApiKey(memoryApiKey)) issues.push("replace the placeholder memoryApiKey value");
 
-  if (issues.length > 0 || !memoryModel || !memoryApiUrl || !memoryApiKey) {
+  if (issues.length > 0) {
     throw new Error(`External API not configured for memory provider: ${issues.join("; ")}`);
   }
 
+  const configuredMemoryModel = requireConfiguredField(memoryModel, "memoryModel");
+  const configuredMemoryApiUrl = requireConfiguredField(memoryApiUrl, "memoryApiUrl");
+  const configuredMemoryApiKey = requireConfiguredField(memoryApiKey, "memoryApiKey");
+
   return {
-    model: memoryModel,
-    apiUrl: memoryApiUrl,
-    apiKey: memoryApiKey,
+    model: configuredMemoryModel,
+    apiUrl: configuredMemoryApiUrl,
+    apiKey: configuredMemoryApiKey,
     memoryTemperature: config.memoryTemperature,
     extraParams: config.memoryExtraParams,
     maxIterations: overrides.maxIterations ?? config.autoCaptureMaxIterations,
