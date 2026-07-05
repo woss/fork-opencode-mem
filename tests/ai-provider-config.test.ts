@@ -102,6 +102,23 @@ describe("AI provider config", () => {
     ).toThrow("replace the placeholder memoryApiKey value");
   });
 
+  it("reports each missing manual provider field before a provider request is built", () => {
+    expect(() =>
+      buildMemoryProviderConfig({
+        memoryApiKey: "sk-realish",
+      })
+    ).toThrow("missing memoryModel, memoryApiUrl");
+  });
+
+  it("requires an API key for hosted manual provider endpoints", () => {
+    expect(() =>
+      buildMemoryProviderConfig({
+        memoryModel: "gpt-4o-mini",
+        memoryApiUrl: "https://api.openai.com/v1",
+      })
+    ).toThrow("missing memoryApiKey");
+  });
+
   it("still allows no-key local OpenAI-compatible endpoints", () => {
     const providerConfig = buildMemoryProviderConfig({
       memoryModel: "local-model",

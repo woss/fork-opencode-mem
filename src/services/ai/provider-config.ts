@@ -1,5 +1,5 @@
 import type { ProviderConfig } from "./providers/base-provider.js";
-import { isPlaceholderApiKey } from "./api-key-placeholder.js";
+import { allowsMissingApiKey, isPlaceholderApiKey } from "./api-key-placeholder.js";
 
 interface MemoryProviderRuntimeConfig {
   memoryModel?: string;
@@ -20,8 +20,17 @@ export function buildMemoryProviderConfig(
   config: MemoryProviderRuntimeConfig,
   overrides: ProviderConfigOverrides = {}
 ): ProviderConfig {
-  if (!config.memoryModel || !config.memoryApiUrl) {
-    throw new Error("External API not configured for memory provider");
+  const memoryModel = config.memoryModel;
+  const memoryApiUrl = config.memoryApiUrl;
+
+  if (!memoryModel || !memoryApiUrl) {
+    const missingFields: string[] = [];
+    if (!memoryModel) missingFields.push("memoryModel");
+    if (!memoryApiUrl) missingFields.push("memoryApiUrl");
+
+    throw new Error(
+      `External API not configured for memory provider: missing ${missingFields.join(", ")}`
+    );
   }
 
   if (isPlaceholderApiKey(config.memoryApiKey)) {
@@ -30,9 +39,13 @@ export function buildMemoryProviderConfig(
     );
   }
 
+  if (!config.memoryApiKey && !allowsMissingApiKey(memoryApiUrl)) {
+    throw new Error("External API not configured for memory provider: missing memoryApiKey");
+  }
+
   return {
-    model: config.memoryModel,
-    apiUrl: config.memoryApiUrl,
+    model: memoryModel,
+    apiUrl: memoryApiUrl,
     apiKey: config.memoryApiKey,
     memoryTemperature: config.memoryTemperature,
     extraParams: config.memoryExtraParams,
