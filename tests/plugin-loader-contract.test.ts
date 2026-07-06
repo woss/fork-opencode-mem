@@ -27,6 +27,15 @@ describe("OpenCode 1.3.x plugin-loader contract", () => {
     );
   });
 
+  it("dist shard manager avoids CommonJS fs require in ESM output", () => {
+    const source = readFileSync(
+      new URL("../dist/services/sqlite/shard-manager.js", import.meta.url),
+      "utf-8"
+    );
+
+    expect(source).not.toMatch(/require\s*\(\s*["']node:fs["']\s*\)/);
+  });
+
   it('package.json has an exports["./server"] field', () => {
     const pkg = readPackageJson();
     const exports = pkg["exports"] as Record<string, unknown> | undefined;
