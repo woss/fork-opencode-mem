@@ -89,7 +89,7 @@ export class UserPromptManager {
   getLastUncapturedPrompt(sessionId: string): UserPrompt | null {
     const maxRetries = CONFIG.autoCaptureMaxRetries ?? 3;
     const stmt = this.db.prepare(`
-      SELECT * FROM user_prompts 
+      SELECT * FROM user_prompts
       WHERE session_id = ? AND captured = 0 AND capture_attempts < ?
       ORDER BY created_at DESC 
       LIMIT 1
@@ -99,6 +99,18 @@ export class UserPromptManager {
     if (!row) return null;
 
     return this.rowToPrompt(row);
+  }
+
+  getUncapturedPromptsForSession(sessionId: string): UserPrompt[] {
+    const maxRetries = CONFIG.autoCaptureMaxRetries ?? 3;
+    const stmt = this.db.prepare(`
+      SELECT * FROM user_prompts
+      WHERE session_id = ? AND captured = 0 AND capture_attempts < ?
+      ORDER BY created_at ASC
+    `);
+
+    const rows = stmt.all(sessionId, maxRetries) as any[];
+    return rows.map((row) => this.rowToPrompt(row));
   }
 
   deletePrompt(promptId: string): void {

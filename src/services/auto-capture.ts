@@ -3,7 +3,7 @@ import { memoryClient } from "./client.js";
 import { getTags } from "./tags.js";
 import { log } from "./logger.js";
 import { CONFIG } from "../config.js";
-import { userPromptManager } from "./user-prompt/user-prompt-manager.js";
+import { userPromptManager, type UserPrompt } from "./user-prompt/user-prompt-manager.js";
 
 interface ToolCallInfo {
   name: string;
@@ -23,13 +23,9 @@ export async function performAutoCapture(
   if (isCaptureRunning) return;
   isCaptureRunning = true;
 
-  let claimedPromptId: string | null = null;
-  const maxRetries = CONFIG.autoCaptureMaxRetries ?? 3;
-  let attempt = 0;
-
   try {
-    const prompt = userPromptManager.getLastUncapturedPrompt(sessionID);
-    if (!prompt) {
+    const prompts = userPromptManager.getUncapturedPromptsForSession(sessionID);
+    if (prompts.length === 0) {
       return;
     }
 
@@ -37,11 +33,30 @@ export async function performAutoCapture(
       return;
     }
 
+    const maxRetries = CONFIG.autoCaptureMaxRetries ?? 3;
+    for (const prompt of prompts) {
+      await capturePrompt(ctx, sessionID, directory, prompt, maxRetries);
+    }
+  } finally {
+    isCaptureRunning = false;
+  }
+}
+
+async function capturePrompt(
+  ctx: PluginInput,
+  sessionID: string,
+  directory: string,
+  prompt: UserPrompt,
+  maxRetries: number
+): Promise<void> {
+  let claimedPromptId: string | null = null;
+  let attempt = prompt.capture_attempts || 0;
+
+  try {
     if (!userPromptManager.claimPrompt(prompt.id)) {
       return;
     }
     claimedPromptId = prompt.id;
-    attempt = prompt.capture_attempts || 0;
 
     while (attempt < maxRetries) {
       attempt++;
@@ -59,12 +74,10 @@ export async function performAutoCapture(
         }
 
         const messages = response.data;
-        const promptIndex = messages.findIndex((m: any) => m.info?.id === prompt.messageId);
-        if (promptIndex === -1) {
+        const aiMessages = getAIResponseMessages(messages, prompt.messageId);
+        if (aiMessages === null) {
           return;
         }
-
-        const aiMessages = messages.slice(promptIndex + 1);
         if (aiMessages.length === 0) {
           return;
         }
@@ -175,8 +188,19 @@ export async function performAutoCapture(
         );
       }
     }
-    isCaptureRunning = false;
   }
+}
+
+function getAIResponseMessages(messages: any[], promptMessageId: string): any[] | null {
+  const promptIndex = messages.findIndex((m: any) => m.info?.id === promptMessageId);
+  if (promptIndex === -1) return null;
+
+  const responseMessages: any[] = [];
+  for (const message of messages.slice(promptIndex + 1)) {
+    if (message.info?.role === "user") break;
+    responseMessages.push(message);
+  }
+  return responseMessages;
 }
 
 function extractAIContent(messages: any[]): {
