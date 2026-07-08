@@ -984,17 +984,23 @@ export class UserProfileManager {
       }
 
       if (!useEmbedding && newItem.description.length >= minDescLen) {
-        (this.coldBuffer as any)[itemType + "s"].push(newItem);
-        if ((this.coldBuffer as any)[itemType + "s"].length > 50) {
-          (this.coldBuffer as any)[itemType + "s"].shift();
+        const isExplicit =
+          (newItem as any).category === "explicit" ||
+          (Array.isArray((newItem as any).evidence) &&
+            (newItem as any).evidence.includes("manual-write"));
+        if (!isExplicit) {
+          (this.coldBuffer as any)[itemType + "s"].push(newItem);
+          if ((this.coldBuffer as any)[itemType + "s"].length > 50) {
+            (this.coldBuffer as any)[itemType + "s"].shift();
+          }
+          this.saveColdBuffer();
+          log("profile cold start: buffered", {
+            type: itemType,
+            cat: newItem.category,
+            bufferSize: (this.coldBuffer as any)[itemType + "s"].length,
+          });
+          continue;
         }
-        this.saveColdBuffer();
-        log("profile cold start: buffered", {
-          type: itemType,
-          cat: newItem.category,
-          bufferSize: (this.coldBuffer as any)[itemType + "s"].length,
-        });
-        continue;
       }
 
       let initCentroid: number[] | undefined;

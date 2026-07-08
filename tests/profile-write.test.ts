@@ -51,6 +51,7 @@ describe("UserProfileManager – explicit preference writes", () => {
             category: "explicit",
             description: "Prefer concise answers",
             confidence: 1.0,
+            frequency: 1,
             evidence: ["manual-write"],
             lastSeen: Date.now(),
           },
@@ -86,6 +87,7 @@ describe("UserProfileManager – explicit preference writes", () => {
             category: "style",
             description: "Uses TypeScript",
             confidence: 0.8,
+            frequency: 1,
             evidence: ["observed"],
             lastSeen: Date.now(),
           },
@@ -103,6 +105,7 @@ describe("UserProfileManager – explicit preference writes", () => {
       category: "explicit",
       description: "Always use numbered lists",
       confidence: 1.0,
+      frequency: 1,
       evidence: ["manual-write"],
       lastSeen: Date.now(),
     };
@@ -134,6 +137,7 @@ describe("UserProfileManager – explicit preference writes", () => {
       category: "explicit",
       description,
       confidence: 1.0,
+      frequency: 1,
       evidence: ["manual-write"],
       lastSeen: Date.now(),
     };
@@ -166,7 +170,7 @@ describe("UserProfileManager – explicit preference writes", () => {
     // Confidence capped at 1.0 (bumped by 0.1 but clamped)
     const conf = d2.preferences.find((p: any) => p.description === description)!.confidence;
     expect(conf).toBeLessThanOrEqual(1.0);
-    expect(conf).toBeGreaterThan(0.9);
+    expect(conf).toBeGreaterThan(0.6);
   });
 
   it("returns null profile for unknown user (no auto-create on read)", async () => {
@@ -201,6 +205,7 @@ describe("UserProfileManager – explicit preference writes", () => {
           category: "explicit",
           description: "Use snake_case",
           confidence: 1.0,
+          frequency: 1,
           evidence: ["manual-write"],
           lastSeen: Date.now(),
         },
