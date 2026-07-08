@@ -16,6 +16,13 @@ import { log } from "./services/logger.js";
 import type { MemoryType } from "./types/index.js";
 import { getLanguageName } from "./services/language-detector.js";
 import type { MemoryScope } from "./services/client.js";
+import {
+  createV2Client,
+  setConnectedProviders,
+  setHostFetch,
+  setV2Client,
+} from "./services/ai/opencode-provider.js";
+import { getHostClientConfig } from "./services/ai/opencode-host-config.js";
 
 function logAutoCaptureProviderStatus(): void {
   if (!CONFIG.autoCaptureEnabled || CONFIG.autoCaptureProviderStatus.ready) return;
@@ -52,11 +59,17 @@ export const OpenCodeMemPlugin: Plugin = async (ctx: PluginInput) => {
     })();
   }
 
+  const hostConfig = getHostClientConfig(ctx);
+  if (hostConfig.fetch) {
+    setHostFetch(hostConfig.fetch);
+  }
+  const serverUrl = hostConfig.baseUrl ?? ctx.serverUrl;
+  if (serverUrl) {
+    setV2Client(createV2Client(serverUrl));
+  }
+
   (async () => {
     try {
-      const { setConnectedProviders, setV2Client, createV2Client } =
-        await import("./services/ai/opencode-provider.js");
-      setV2Client(createV2Client(ctx.serverUrl));
       const providerResult = await ctx.client.provider.list();
       if (providerResult.data?.connected) {
         setConnectedProviders(providerResult.data.connected);
@@ -174,6 +187,13 @@ export const OpenCodeMemPlugin: Plugin = async (ctx: PluginInput) => {
         if (textParts.length === 0) return;
         const userMessage = textParts.map((p) => p.text).join("\n");
         if (!userMessage.trim()) return;
+
+        if (
+          userMessage.includes("Analyze this conversation.") &&
+          userMessage.includes('type="skip"')
+        ) {
+          return;
+        }
 
         userPromptManager.savePrompt(input.sessionID, output.message.id, directory, userMessage);
 
