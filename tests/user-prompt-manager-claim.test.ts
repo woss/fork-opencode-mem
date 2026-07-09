@@ -58,6 +58,16 @@ describe("UserPromptManager.claimPrompt / releaseClaim", () => {
     return raw?.captured ?? -1;
   }
 
+  function setCreatedAt(id: string, createdAt: number): void {
+    (
+      mgr as unknown as {
+        db: { prepare: (s: string) => { run: (...args: unknown[]) => unknown } };
+      }
+    ).db
+      .prepare(`UPDATE user_prompts SET created_at = ? WHERE id = ?`)
+      .run(createdAt, id);
+  }
+
   function newPrompt(sessionId = "session-test", content = "hello") {
     const id = mgr.savePrompt(
       sessionId,
@@ -124,5 +134,27 @@ describe("UserPromptManager.claimPrompt / releaseClaim", () => {
 
     const prompt = mgr.getLastUncapturedPrompt("session-retries");
     expect(prompt).toBeNull();
+  });
+
+  it("returns all uncaptured prompts for a session oldest first", () => {
+    const later = newPrompt("session-batch", "later");
+    const older = newPrompt("session-batch", "older");
+    const captured = newPrompt("session-batch", "captured");
+    const otherSession = newPrompt("session-other", "other");
+    const retriedOut = newPrompt("session-batch", "retried out");
+
+    setCreatedAt(later, 20);
+    setCreatedAt(older, 10);
+    setCreatedAt(captured, 15);
+    setCreatedAt(otherSession, 5);
+    setCreatedAt(retriedOut, 25);
+    mgr.markAsCaptured(captured);
+    for (let i = 0; i < 4; i++) {
+      mgr.recordFailedAttempt(retriedOut);
+    }
+
+    const prompts = mgr.getUncapturedPromptsForSession("session-batch");
+
+    expect(prompts.map((prompt) => prompt.id)).toEqual([older, later]);
   });
 });
