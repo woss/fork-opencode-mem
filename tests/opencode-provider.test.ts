@@ -582,15 +582,20 @@ describe("generateStructuredOutput regression tests (issue #110)", () => {
         calls.push(call);
 
         if (call.method === "POST" && call.url.endsWith("/session")) {
-          return new Response(JSON.stringify({ id: "ses_host_fetch" }));
+          return new Response(JSON.stringify({ id: "ses_host_fetch" }), {
+            headers: { "Content-Type": "application/json" },
+          });
         }
         if (call.method === "POST" && call.url.includes("/session/ses_host_fetch/message")) {
           return new Response(
-            JSON.stringify({ info: { structured_output: { topic: "host", count: 1 } }, parts: [] })
+            JSON.stringify({ info: { structured_output: { topic: "host", count: 1 } }, parts: [] }),
+            { headers: { "Content-Type": "application/json" } }
           );
         }
         if (call.method === "DELETE") {
-          return new Response(JSON.stringify(true));
+          return new Response(JSON.stringify(true), {
+            headers: { "Content-Type": "application/json" },
+          });
         }
         throw new Error(`unexpected host fetch: ${call.method} ${call.url}`);
       },

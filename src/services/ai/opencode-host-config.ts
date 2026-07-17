@@ -1,6 +1,7 @@
 export type HostClientConfig = {
   readonly baseUrl: string | undefined;
   readonly fetch: typeof fetch | undefined;
+  readonly headers?: RequestInit["headers"];
   readonly clientKeys: readonly string[];
   readonly sdkConfigCount: number;
 };
@@ -14,10 +15,12 @@ export function getHostClientConfig(ctx: { readonly client: unknown }): HostClie
   const configs = sdkConfigs(client);
   const baseUrl = configs.find((config) => typeof config["baseUrl"] === "string")?.["baseUrl"];
   const customFetch = configs.find((config) => isFetch(config["fetch"]))?.["fetch"];
+  const headers = configs.find((config) => isHeadersInit(config["headers"]))?.["headers"];
 
   return {
     baseUrl: typeof baseUrl === "string" ? baseUrl : undefined,
     fetch: isFetch(customFetch) ? customFetch : undefined,
+    ...(isHeadersInit(headers) ? { headers } : {}),
     clientKeys: Object.keys(client),
     sdkConfigCount: configs.length,
   };
@@ -54,4 +57,12 @@ function isConfigGetter(value: unknown): value is (this: unknown) => unknown {
 
 function isFetch(value: unknown): value is typeof fetch {
   return typeof value === "function";
+}
+
+function isHeadersInit(value: unknown): value is RequestInit["headers"] {
+  return (
+    value instanceof Headers ||
+    Array.isArray(value) ||
+    (typeof value === "object" && value !== null)
+  );
 }

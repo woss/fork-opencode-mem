@@ -44,6 +44,19 @@ describe("OpenCode host client config", () => {
     });
   });
 
+  it("extracts host default headers from nested SDK service clients", () => {
+    const ctx = pluginInput({
+      session: sdkService({
+        baseUrl: "http://localhost:4096",
+        headers: { Authorization: "Basic test-credential" },
+      }),
+    });
+
+    expect(getHostClientConfig(ctx).headers).toEqual({
+      Authorization: "Basic test-credential",
+    });
+  });
+
   it("resets stale host fetch and logs when SDK config reflection finds no host fetch", async () => {
     const globalFetch = globalThis.fetch;
     const logFile = join(mkdtempSync(join(tmpdir(), "opencode-mem-test-")), "opencode-mem.log");

@@ -46,7 +46,12 @@ export async function configureOpencodeHostTransport(ctx: {
 
   const serverUrl = hostConfig.baseUrl ?? ctx.serverUrl;
   if (serverUrl) {
-    setV2Client(createV2Client(serverUrl));
+    setV2Client(
+      createV2Client(serverUrl, {
+        fetch: hostConfig.fetch,
+        headers: hostConfig.headers,
+      })
+    );
   }
 }
 
