@@ -11,16 +11,9 @@
  * then delete the session so it does not pollute the user's TUI session
  * list.
  *
- * We intentionally bypass the `@opencode-ai/sdk` client for these three
- * endpoints. Issue #110 showed that relying on `client.session.create` /
- * `client.session.prompt` / `client.session.delete` is brittle: the SDK
- * class layout has shifted across releases (e.g. v1.14.48's `Session` only
- * exposes `list()` in some builds, with the real methods living on a
- * renamed `Session2` reachable via a different property path). Going
- * straight to `fetch` against the documented server endpoints
- * (`POST /session`, `POST /session/{id}/message`, `DELETE /session/{id}`)
- * makes us resilient to those SDK churns and lets us test the wire
- * protocol directly with a `globalThis.fetch` stub.
+ * The primary transport is the authenticated v2 SDK client initialized from
+ * the plugin host's client configuration. A raw fetch fallback remains for
+ * older SDK builds that do not expose the v2 session methods.
  */
 
 import type { z } from "zod";
@@ -31,12 +24,13 @@ import {
   responseStatus,
   type FetchEndpoint,
 } from "./opencode-diagnostics.js";
-import { createLazyV2Client } from "./opencode-sdk-client.js";
+import { createLazyV2Client, type HostTransport } from "./opencode-sdk-client.js";
 
 let _connectedProviders: Set<string> = new Set();
 let _v2Client: OpencodeClient | undefined;
 let _v2BaseUrl: string | undefined;
 let _hostFetch: typeof fetch | undefined;
+let _useSdkTransport = false;
 
 export function setHostFetch(customFetch: typeof fetch): void {
   _hostFetch = customFetch;
@@ -62,10 +56,12 @@ export function getV2Client(): OpencodeClient | undefined {
   return _v2Client;
 }
 
-export function createV2Client(serverUrl: URL | string): OpencodeClient {
+export function createV2Client(serverUrl: URL | string, transport?: HostTransport): OpencodeClient {
   const baseUrl = typeof serverUrl === "string" ? serverUrl : serverUrl.toString();
+  const activeTransport = transport ?? (_hostFetch ? { fetch: _hostFetch } : undefined);
   _v2BaseUrl = baseUrl;
-  return createLazyV2Client(baseUrl);
+  _useSdkTransport = Boolean(activeTransport?.fetch || activeTransport?.headers);
+  return createLazyV2Client(baseUrl, activeTransport);
 }
 
 export interface StructuredOutputOptions<T> {
@@ -86,7 +82,28 @@ export interface StructuredOutputOptions<T> {
  * or final Zod validation failure.
  */
 export async function generateStructuredOutput<T>(opts: StructuredOutputOptions<T>): Promise<T> {
-  const { providerID, modelID, systemPrompt, userPrompt, schema, directory, retryCount } = opts;
+  const { client, providerID, modelID, systemPrompt, userPrompt, schema, directory, retryCount } =
+    opts;
+
+  const jsonSchema =
+    (
+      schema as unknown as {
+        toJSONSchema?: () => Record<string, unknown>;
+      }
+    ).toJSONSchema?.() ?? (await import("zod")).z.toJSONSchema(schema);
+
+  if (_useSdkTransport && hasV2SessionClient(client)) {
+    return generateViaSdkClient(client, {
+      providerID,
+      modelID,
+      systemPrompt,
+      userPrompt,
+      directory,
+      retryCount,
+      jsonSchema,
+      schema,
+    });
+  }
 
   const baseUrl = _v2BaseUrl;
   if (!baseUrl) {
@@ -95,16 +112,6 @@ export async function generateStructuredOutput<T>(opts: StructuredOutputOptions<
     );
   }
   const base = stripTrailingSlash(baseUrl);
-
-  // zod v4 exposes JSON Schema export natively (instance `.toJSONSchema()`
-  // and global `z.toJSONSchema()`); we prefer instance, fall back to global.
-  // This avoids pulling in a separate `zod-to-json-schema` dependency.
-  const jsonSchema =
-    (
-      schema as unknown as {
-        toJSONSchema?: () => Record<string, unknown>;
-      }
-    ).toJSONSchema?.() ?? (await import("zod")).z.toJSONSchema(schema);
 
   const sessionID = await createSession(base, directory);
   try {
@@ -142,6 +149,112 @@ export async function generateStructuredOutput<T>(opts: StructuredOutputOptions<
       // intentionally swallowed
     }
   }
+}
+
+type V2SessionClient = {
+  session: {
+    create(parameters?: Record<string, unknown>): Promise<unknown>;
+    prompt(parameters: Record<string, unknown>): Promise<unknown>;
+    delete(parameters: Record<string, unknown>): Promise<unknown>;
+  };
+};
+
+interface SdkStructuredOutputArgs<T> {
+  providerID: string;
+  modelID: string;
+  systemPrompt: string;
+  userPrompt: string;
+  directory?: string;
+  retryCount?: number;
+  jsonSchema: Record<string, unknown>;
+  schema: z.ZodType<T>;
+}
+
+function hasV2SessionClient(client: OpencodeClient): client is OpencodeClient & V2SessionClient {
+  const session = (client as unknown as { session?: unknown }).session;
+  if (typeof session !== "object" || session === null) return false;
+  const candidate = session as Record<string, unknown>;
+  return (
+    typeof candidate.create === "function" &&
+    typeof candidate.prompt === "function" &&
+    typeof candidate.delete === "function"
+  );
+}
+
+async function generateViaSdkClient<T>(
+  client: OpencodeClient & V2SessionClient,
+  args: SdkStructuredOutputArgs<T>
+): Promise<T> {
+  const createdResponse = await client.session.create({
+    title: "opencode-mem capture",
+    ...(args.directory ? { directory: args.directory } : {}),
+  });
+  const created = readSdkData<{ id?: string }>(createdResponse, "POST /session");
+  if (!created.id) {
+    throw new Error(
+      "opencode-mem: session.create returned no session id; cannot generate structured output"
+    );
+  }
+
+  const sessionID = created.id;
+  try {
+    const promptResponse = await client.session.prompt({
+      sessionID,
+      ...(args.directory ? { directory: args.directory } : {}),
+      model: { providerID: args.providerID, modelID: args.modelID },
+      system: args.systemPrompt,
+      parts: [{ type: "text", text: args.userPrompt }],
+      format: {
+        type: "json_schema",
+        schema: args.jsonSchema,
+        ...(args.retryCount !== undefined ? { retryCount: args.retryCount } : {}),
+      },
+    });
+    const data = readSdkData<MessageV2WithParts>(promptResponse, "POST /session/{id}/message");
+    if (!data.info) {
+      throw new Error("opencode-mem: prompt response missing `info`");
+    }
+    if (data.info.error) {
+      throw new Error(
+        `opencode-mem: opencode reported ${data.info.error.name}: ${formatAssistantError(data.info.error)}`
+      );
+    }
+
+    const structuredOutput = data.info.structured_output ?? data.info.structured;
+    if (structuredOutput === undefined || structuredOutput === null) {
+      throw new Error(
+        "opencode-mem: opencode returned no structured output (info.structured_output/info.structured were empty)"
+      );
+    }
+    return args.schema.parse(structuredOutput);
+  } finally {
+    try {
+      await client.session.delete({
+        sessionID,
+        ...(args.directory ? { directory: args.directory } : {}),
+      });
+    } catch {
+      // Best-effort cleanup for the transient capture session.
+    }
+  }
+}
+
+function readSdkData<T>(response: unknown, label: string): T {
+  const result = response as
+    | { data?: T; error?: unknown; request?: Request; response?: Response }
+    | undefined;
+  if (result?.error !== undefined) {
+    const status = result.response ? ` (${responseStatus(result.response)})` : "";
+    const responseUrl = result.response?.url || result.request?.url;
+    const url = responseUrl ? diagnosticUrl(responseUrl) : "the authenticated client";
+    throw new Error(
+      `opencode-mem: opencode ${label} failed at ${url}${status}: <redacted response body>`
+    );
+  }
+  if (result?.data === undefined) {
+    throw new Error(`opencode-mem: opencode ${label} returned no response data`);
+  }
+  return result.data;
 }
 
 function stripTrailingSlash(url: string): string {
