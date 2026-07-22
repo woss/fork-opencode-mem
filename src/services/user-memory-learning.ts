@@ -355,10 +355,15 @@ CRITICAL: Only output observations grounded in the RECENT PROMPTS above. Write d
 - "User analyzes problems and verifies solutions" (too abstract — not a concrete step sequence)
 - "User writes code and tests it" (too generic — covers everything)`;
 
+  const maxBytes = CONFIG.userProfileMaxContextBytes ?? 32768;
+  const truncate = (s: string) =>
+    s.length > maxBytes
+      ? s.substring(0, maxBytes) + "\n[... context truncated to userProfileMaxContextBytes ...]"
+      : s;
   if (validationPrompt) {
-    return base + "\n\n" + validationPrompt;
+    return truncate(base + "\n\n" + validationPrompt);
   }
-  return base;
+  return truncate(base);
 }
 
 type AnalysisResult = { raw: UserProfileData; merged: UserProfileData | null };
