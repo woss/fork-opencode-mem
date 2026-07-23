@@ -4,6 +4,8 @@ import { connectionManager } from "./sqlite/connection-manager.js";
 import { CONFIG } from "../config.js";
 import { log } from "./logger.js";
 import { userPromptManager } from "./user-prompt/user-prompt-manager.js";
+import Database from "bun:sqlite";
+import { join } from "node:path";
 
 interface CleanupResult {
   deletedCount: number;
@@ -104,6 +106,16 @@ export class CleanupService {
       }
 
       const promptsDeleted = promptCleanupResult.deleted - linkedMemoryIds.size;
+
+      try {
+        const promptsDbPath = join(CONFIG.storagePath, "user-prompts.db");
+        const vacuumDb = new Database(promptsDbPath, { readonly: false, create: false });
+        vacuumDb.exec("VACUUM;");
+        vacuumDb.close();
+        log("Cleanup: VACUUM done", { db: promptsDbPath });
+      } catch (err) {
+        log("Cleanup: VACUUM skipped (DB busy)", { error: String(err) });
+      }
 
       return {
         deletedCount: totalDeleted,
