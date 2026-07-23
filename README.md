@@ -103,6 +103,7 @@ The plugin creates a full commented template at this path on first startup. This
   "showErrorToasts": true,
 
   "userProfileAnalysisInterval": 10,
+  "userProfileMaxContextBytes": 32768,
   "maxMemories": 10,
 
   "compaction": {

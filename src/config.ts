@@ -62,6 +62,7 @@ interface OpenCodeMemConfig {
   deduplicationEnabled?: boolean;
   deduplicationSimilarityThreshold?: number;
   userProfileAnalysisInterval?: number;
+  userProfileMaxContextBytes?: number;
   userProfileDisplayPreferences?: number;
   userProfileDisplayPatterns?: number;
   userProfileDisplayWorkflows?: number;
@@ -160,6 +161,7 @@ const DEFAULTS: Required<
   deduplicationEnabled: true,
   deduplicationSimilarityThreshold: 0.9,
   userProfileAnalysisInterval: 10,
+  userProfileMaxContextBytes: 32768,
   userProfileDisplayPreferences: 20,
   userProfileDisplayPatterns: 15,
   userProfileDisplayWorkflows: 10,
@@ -619,6 +621,8 @@ function buildConfig(fileConfig: OpenCodeMemConfig) {
       fileConfig.deduplicationSimilarityThreshold ?? DEFAULTS.deduplicationSimilarityThreshold,
     userProfileAnalysisInterval:
       fileConfig.userProfileAnalysisInterval ?? DEFAULTS.userProfileAnalysisInterval,
+    userProfileMaxContextBytes:
+      fileConfig.userProfileMaxContextBytes ?? DEFAULTS.userProfileMaxContextBytes,
     userProfileDisplayPreferences:
       fileConfig.userProfileDisplayPreferences ?? DEFAULTS.userProfileDisplayPreferences,
     userProfileDisplayPatterns:
